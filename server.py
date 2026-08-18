@@ -75,6 +75,7 @@ async def join_room(sid, data):
         'hostOnlyVideo': room['hostOnlyVideo'],
         'videoState': room.get('videoState', 'PAUSED'),
         'videoTime': room.get('videoTime', 0),
+        'activeScreenShare': room.get('activeScreenShare', None),
     }
 
 @sio.event
@@ -116,6 +117,10 @@ async def broadcast(sid, data):
             rooms[room_id]['hostOnlyVideo'] = data.get('hostOnlyVideo')
         elif data.get('type') == 'structured-chat':
             rooms[room_id]['chatHistory'].append(data)
+        elif data.get('type') == 'screenshare-started':
+            rooms[room_id]['activeScreenShare'] = data
+        elif data.get('type') == 'screenshare-stopped':
+            rooms[room_id]['activeScreenShare'] = None
         elif data.get('type') == 'name-change':
             user_names[sid] = data.get('newName', 'Guest')
             
