@@ -7,9 +7,20 @@ sio = socketio.AsyncServer(async_mode='aiohttp', cors_allowed_origins='*')
 app = web.Application()
 sio.attach(app)
 
+import asyncio
+
 rooms = {}
 user_to_room = {}
 user_names = {}
+disconnect_timers = {}
+
+async def cleanup_room(room_id):
+    await asyncio.sleep(12)  # 12-second grace period for host refresh
+    if room_id in rooms:
+        await sio.emit('broadcast', {'type': 'kicked', 'reason': 'The host has left the room.'}, room=room_id)
+        del rooms[room_id]
+    if room_id in disconnect_timers:
+        del disconnect_timers[room_id]
 
 async def index(request):
     return web.Response(text="Backend is running!")
@@ -23,7 +34,12 @@ async def join_room(sid, data):
     username = data.get('username', 'Guest')
     user_names[sid] = username
     
-    if is_host:
+    # Cancel pending cleanup if room is re-joined (e.g. host refresh)
+    if room_id in disconnect_timers:
+        disconnect_timers[room_id].cancel()
+        del disconnect_timers[room_id]
+    
+    if room_id not in rooms:
         rooms[room_id] = {
             'host': sid,
             'currentVideoUrl': '',
@@ -33,9 +49,11 @@ async def join_room(sid, data):
             'users': [sid]
         }
     else:
-        if room_id not in rooms:
-            return {'success': False, 'error': 'Room not found or host left.'}
-        rooms[room_id]['users'].append(sid)
+        room = rooms[room_id]
+        if is_host:
+            room['host'] = sid
+        if sid not in room['users']:
+            room['users'].append(sid)
     
     await sio.enter_room(sid, room_id)
     user_to_room[sid] = room_id
@@ -67,8 +85,11 @@ async def disconnect(sid):
             room['users'].remove(sid)
             
         if room['host'] == sid:
-            await sio.emit('broadcast', {'type': 'kicked', 'reason': 'The host has left the room.'}, room=room_id)
-            del rooms[room_id]
+            # Schedule a 12-second grace period before destroying room (allows host page refresh)
+            if room_id in disconnect_timers:
+                disconnect_timers[room_id].cancel()
+            timer = asyncio.create_task(cleanup_room(room_id))
+            disconnect_timers[room_id] = timer
         else:
             await sio.emit('user-count', {'count': len(room['users'])}, room=room_id)
             await sio.emit('broadcast', {'type': 'user-left', 'name': username}, room=room_id)
