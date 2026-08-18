@@ -15,7 +15,7 @@ user_names = {}
 disconnect_timers = {}
 
 async def cleanup_room(room_id):
-    await asyncio.sleep(12)  # 12-second grace period for host refresh
+    await asyncio.sleep(300)  # 5-minute (300 seconds) grace period for host disconnect/refresh
     if room_id in rooms:
         await sio.emit('broadcast', {'type': 'kicked', 'reason': 'The host has left the room.'}, room=room_id)
         del rooms[room_id]
