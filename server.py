@@ -73,6 +73,8 @@ async def join_room(sid, data):
         'videoQueue': room['videoQueue'],
         'chatHistory': room['chatHistory'],
         'hostOnlyVideo': room['hostOnlyVideo'],
+        'videoState': room.get('videoState', 'PAUSED'),
+        'videoTime': room.get('videoTime', 0),
     }
 
 @sio.event
@@ -105,6 +107,9 @@ async def broadcast(sid, data):
         # Update server state for late joiners
         if data.get('type') == 'video-sync':
             rooms[room_id]['currentVideoUrl'] = data.get('url')
+        elif data.get('type') == 'video-state-sync':
+            rooms[room_id]['videoState'] = data.get('state')
+            rooms[room_id]['videoTime'] = data.get('time')
         elif data.get('type') == 'queue-sync':
             rooms[room_id]['videoQueue'] = data.get('queue')
         elif data.get('type') == 'host-settings':
