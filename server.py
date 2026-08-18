@@ -45,7 +45,7 @@ async def join_room(sid, data):
             'currentVideoUrl': '',
             'videoQueue': [],
             'chatHistory': [],
-            'hostOnlyVideo': True,
+            'hostOnlyVideo': False,
             'users': [sid]
         }
     else:
