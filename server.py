@@ -9,6 +9,7 @@ sio.attach(app)
 
 rooms = {}
 user_to_room = {}
+user_names = {}
 
 async def index(request):
     return web.Response(text="Backend is running!")
@@ -19,6 +20,8 @@ app.router.add_get('/', index)
 async def join_room(sid, data):
     room_id = data.get('roomId')
     is_host = data.get('isHost', False)
+    username = data.get('username', 'Guest')
+    user_names[sid] = username
     
     if is_host:
         rooms[room_id] = {
@@ -42,6 +45,10 @@ async def join_room(sid, data):
     # Notify everyone of the new user count
     await sio.emit('user-count', {'count': len(room['users'])}, room=room_id)
     
+    # Notify others in the room that a user joined
+    if not is_host:
+        await sio.emit('broadcast', {'type': 'user-joined', 'name': username}, room=room_id, skip_sid=sid)
+    
     return {
         'success': True,
         'currentVideoUrl': room['currentVideoUrl'],
@@ -53,6 +60,7 @@ async def join_room(sid, data):
 @sio.event
 async def disconnect(sid):
     room_id = user_to_room.get(sid)
+    username = user_names.pop(sid, 'Guest')
     if room_id and room_id in rooms:
         room = rooms[room_id]
         if sid in room['users']:
@@ -63,6 +71,7 @@ async def disconnect(sid):
             del rooms[room_id]
         else:
             await sio.emit('user-count', {'count': len(room['users'])}, room=room_id)
+            await sio.emit('broadcast', {'type': 'user-left', 'name': username}, room=room_id)
     
     if sid in user_to_room:
         del user_to_room[sid]
@@ -81,6 +90,8 @@ async def broadcast(sid, data):
             rooms[room_id]['hostOnlyVideo'] = data.get('hostOnlyVideo')
         elif data.get('type') == 'structured-chat':
             rooms[room_id]['chatHistory'].append(data)
+        elif data.get('type') == 'name-change':
+            user_names[sid] = data.get('newName', 'Guest')
             
         await sio.emit('broadcast', data, room=room_id, skip_sid=sid)
 
