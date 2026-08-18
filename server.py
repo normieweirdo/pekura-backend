@@ -75,7 +75,6 @@ async def join_room(sid, data):
         'hostOnlyVideo': room['hostOnlyVideo'],
         'videoState': room.get('videoState', 'PAUSED'),
         'videoTime': room.get('videoTime', 0),
-        'activeScreenShare': room.get('activeScreenShare', None),
     }
 
 @sio.event
@@ -86,11 +85,6 @@ async def disconnect(sid):
         room = rooms[room_id]
         if sid in room['users']:
             room['users'].remove(sid)
-            
-        active_share = room.get('activeScreenShare')
-        if active_share and active_share.get('sid') == sid:
-            room['activeScreenShare'] = None
-            await sio.emit('broadcast', {'type': 'screenshare-stopped', 'streamId': active_share.get('streamId')}, room=room_id)
 
         if room['host'] == sid:
             # Schedule a 12-second grace period before destroying room (allows host page refresh)
@@ -122,11 +116,6 @@ async def broadcast(sid, data):
             rooms[room_id]['hostOnlyVideo'] = data.get('hostOnlyVideo')
         elif data.get('type') == 'structured-chat':
             rooms[room_id]['chatHistory'].append(data)
-        elif data.get('type') == 'screenshare-started':
-            data['sid'] = sid
-            rooms[room_id]['activeScreenShare'] = data
-        elif data.get('type') == 'screenshare-stopped':
-            rooms[room_id]['activeScreenShare'] = None
         elif data.get('type') == 'name-change':
             user_names[sid] = data.get('newName', 'Guest')
             
